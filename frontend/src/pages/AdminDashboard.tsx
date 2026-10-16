@@ -1,0 +1,840 @@
+﻿import React, { useState, useEffect } from "react";
+import { api } from "../api";
+import { User, Store, AdminMetrics } from "../types";
+import { StarRating } from "../components/StarRating";
+import {
+  Users,
+  Store as StoreIcon,
+  Star,
+  Plus,
+  Search,
+  ArrowUpDown,
+  Filter,
+  X,
+  AlertCircle,
+  CheckCircle2,
+  Building,
+  Mail,
+  MapPin,
+  ShieldCheck,
+  ShoppingBag,
+  UserCheck,
+} from "lucide-react";
+
+export const AdminDashboard: React.FC = () => {
+  const [metrics, setMetrics] = useState<AdminMetrics>({
+    totalUsers: 0,
+    totalStores: 0,
+    totalRatings: 0,
+  });
+
+  const [activeTab, setActiveTab] = useState<"stores" | "users">("stores");
+
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storesLoading, setStoresLoading] = useState(false);
+  const [storeSearch, setStoreSearch] = useState("");
+  const [storeSortBy, setStoreSortBy] = useState("name");
+  const [storeSortOrder, setStoreSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("");
+  const [userSortBy, setUserSortBy] = useState("name");
+  const [userSortOrder, setUserSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isAddStoreModalOpen, setIsAddStoreModalOpen] = useState(false);
+
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserAddress, setNewUserAddress] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"ADMIN" | "USER" | "STORE_OWNER">("USER");
+  const [userModalError, setUserModalError] = useState<string | null>(null);
+  const [userModalSuccess, setUserModalSuccess] = useState<string | null>(null);
+  const [userModalLoading, setUserModalLoading] = useState(false);
+
+  const [newStoreName, setNewStoreName] = useState("");
+  const [newStoreEmail, setNewStoreEmail] = useState("");
+  const [newStoreAddress, setNewStoreAddress] = useState("");
+  const [newStoreOwnerId, setNewStoreOwnerId] = useState("");
+  const [storeModalError, setStoreModalError] = useState<string | null>(null);
+  const [storeModalSuccess, setStoreModalSuccess] = useState<string | null>(null);
+  const [storeModalLoading, setStoreModalLoading] = useState(false);
+
+  const fetchMetrics = async () => {
+    try {
+      const data = await api.getAdminMetrics();
+      setMetrics(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchStores = async () => {
+    try {
+      setStoresLoading(true);
+      const res = await api.getAdminStores({
+        search: storeSearch,
+        sortBy: storeSortBy,
+        order: storeSortOrder,
+      });
+      setStores(res.stores);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStoresLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      const res = await api.getAdminUsers({
+        search: userSearch,
+        role: userRoleFilter,
+        sortBy: userSortBy,
+        order: userSortOrder,
+      });
+      setUsers(res.users);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMetrics();
+  }, []);
+
+  useEffect(() => {
+    fetchStores();
+  }, [storeSearch, storeSortBy, storeSortOrder]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [userSearch, userRoleFilter, userSortBy, userSortOrder]);
+
+  const handleStoreSort = (field: string) => {
+    if (storeSortBy === field) {
+      setStoreSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setStoreSortBy(field);
+      setStoreSortOrder("asc");
+    }
+  };
+
+  const handleUserSort = (field: string) => {
+    if (userSortBy === field) {
+      setUserSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setUserSortBy(field);
+      setUserSortOrder("asc");
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUserModalError(null);
+    setUserModalSuccess(null);
+
+    if (newUserName.length < 20 || newUserName.length > 60) {
+      setUserModalError("Name must be between 20 and 60 characters.");
+      return;
+    }
+
+    if (newUserAddress.length > 400) {
+      setUserModalError("Address cannot exceed 400 characters.");
+      return;
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,16}$/;
+    if (!passwordRegex.test(newUserPassword)) {
+      setUserModalError(
+        "Password must be 8-16 characters and include at least one uppercase letter and one special character."
+      );
+      return;
+    }
+
+    try {
+      setUserModalLoading(true);
+      const res = await api.createAdminUser({
+        name: newUserName,
+        email: newUserEmail,
+        address: newUserAddress,
+        password: newUserPassword,
+        role: newUserRole,
+      });
+
+      setUserModalSuccess(res.message || "User created successfully!");
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserAddress("");
+      setNewUserPassword("");
+      fetchUsers();
+      fetchMetrics();
+      setTimeout(() => {
+        setIsAddUserModalOpen(false);
+        setUserModalSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setUserModalError(err.message || "Failed to create user");
+    } finally {
+      setUserModalLoading(false);
+    }
+  };
+
+  const handleCreateStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStoreModalError(null);
+    setStoreModalSuccess(null);
+
+    if (newStoreAddress.length > 400) {
+      setStoreModalError("Address cannot exceed 400 characters.");
+      return;
+    }
+
+    try {
+      setStoreModalLoading(true);
+      const res = await api.createAdminStore({
+        name: newStoreName,
+        email: newStoreEmail,
+        address: newStoreAddress,
+        ownerId: newStoreOwnerId || null,
+      });
+
+      setStoreModalSuccess(res.message || "Store created successfully!");
+      setNewStoreName("");
+      setNewStoreEmail("");
+      setNewStoreAddress("");
+      setNewStoreOwnerId("");
+      fetchStores();
+      fetchMetrics();
+      setTimeout(() => {
+        setIsAddStoreModalOpen(false);
+        setStoreModalSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setStoreModalError(err.message || "Failed to create store");
+    } finally {
+      setStoreModalLoading(false);
+    }
+  };
+
+  const eligibleStoreOwners = users.filter((u) => u.role === "STORE_OWNER");
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            System Administrator Dashboard
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Manage platform users, stores, monitor submissions, and system health
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsAddStoreModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl border border-slate-200 shadow-xs transition-all hover:border-slate-300"
+          >
+            <Building className="w-4 h-4 text-brand-600" />
+            <span>Add Store</span>
+          </button>
+          <button
+            onClick={() => setIsAddUserModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-brand-600/20 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add User</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Total Users
+            </p>
+            <h3 className="text-3xl font-black text-slate-900 mt-2">
+              {metrics.totalUsers}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Admin, Owner & Normal users</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
+            <Users className="w-7 h-7" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Total Stores
+            </p>
+            <h3 className="text-3xl font-black text-slate-900 mt-2">
+              {metrics.totalStores}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Registered business listings</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-100">
+            <StoreIcon className="w-7 h-7" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Submitted Ratings
+            </p>
+            <h3 className="text-3xl font-black text-slate-900 mt-2">
+              {metrics.totalRatings}
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Community reviews recorded</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+            <Star className="w-7 h-7" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="flex border-b border-slate-200 px-6 pt-4 gap-6 bg-slate-50/50">
+          <button
+            onClick={() => setActiveTab("stores")}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "stores"
+                ? "border-brand-600 text-brand-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <StoreIcon className="w-4 h-4" />
+            <span>Stores Directory ({stores.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`pb-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all ${
+              activeTab === "users"
+                ? "border-brand-600 text-brand-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Platform Users ({users.length})</span>
+          </button>
+        </div>
+
+        {activeTab === "stores" && (
+          <div className="p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter stores by name, email, address..."
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  className="w-full pl-9 pr-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                />
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                Click column headers to sort (Name, Email, Address, Rating)
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th
+                      onClick={() => handleStoreSort("name")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Store Name</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleStoreSort("email")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Email</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleStoreSort("address")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Address</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleStoreSort("rating")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Overall Rating</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {storesLoading ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-slate-400">
+                        Loading stores...
+                      </td>
+                    </tr>
+                  ) : stores.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-8 text-slate-400">
+                        No stores found matching your criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    stores.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-3.5 font-bold text-slate-900">
+                          {s.name}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600">
+                          {s.email}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 max-w-xs truncate" title={s.address}>
+                          {s.address}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <StarRating rating={s.averageRating} size="sm" showValue />
+                            <span className="text-xs text-slate-400">
+                              ({s.totalRatings} {s.totalRatings === 1 ? "review" : "reviews"})
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "users" && (
+          <div className="p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Filter by name, email, address..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-4 h-4 text-slate-400" />
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    className="py-2 px-3 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-700"
+                  >
+                    <option value="">All Roles</option>
+                    <option value="ADMIN">System Administrator</option>
+                    <option value="STORE_OWNER">Store Owner</option>
+                    <option value="USER">Normal User</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                Click column headers to sort (Name, Email, Address, Role)
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th
+                      onClick={() => handleUserSort("name")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Name</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleUserSort("email")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Email</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleUserSort("address")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Address</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleUserSort("role")}
+                      className="px-4 py-3.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Role</span>
+                        <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                    </th>
+                    <th className="px-4 py-3.5">
+                      <span>Owner Store & Rating</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {usersLoading ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-slate-400">
+                        Loading users...
+                      </td>
+                    </tr>
+                  ) : users.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8 text-slate-400">
+                        No users found matching your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    users.map((u) => {
+                      const roleConfig =
+                        {
+                          ADMIN: { label: "Admin", bg: "bg-purple-100 text-purple-800 border-purple-200", icon: ShieldCheck },
+                          STORE_OWNER: { label: "Store Owner", bg: "bg-amber-100 text-amber-800 border-amber-200", icon: ShoppingBag },
+                          USER: { label: "Normal User", bg: "bg-brand-100 text-brand-800 border-brand-200", icon: UserCheck },
+                        }[u.role] ?? { label: u.role, bg: "bg-slate-100 text-slate-800 border-slate-200", icon: UserCheck };
+                      const Icon = roleConfig.icon;
+
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3.5 font-bold text-slate-900">
+                            {u.name}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600">
+                            {u.email}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600 max-w-xs truncate" title={u.address}>
+                            {u.address}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${roleConfig.bg}`}>
+                              <Icon className="w-3 h-3" />
+                              {roleConfig.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {u.role === "STORE_OWNER" ? (
+                              u.storeRating !== null && u.storeRating !== undefined ? (
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-semibold text-slate-800 truncate max-w-[140px]">
+                                    {u.storeName || "Assigned Store"}
+                                  </div>
+                                  <StarRating rating={u.storeRating} size="sm" showValue />
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">No store assigned</span>
+                              )
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isAddUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 sticky top-0 bg-white">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-lg">
+                <Users className="w-5 h-5 text-brand-600" />
+                <h3>Create New User</h3>
+              </div>
+              <button
+                onClick={() => setIsAddUserModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+              {userModalError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5" />
+                  <span>{userModalError}</span>
+                </div>
+              )}
+
+              {userModalSuccess && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <span>{userModalSuccess}</span>
+                </div>
+              )}
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Full Name (20 - 60 chars)
+                  </label>
+                  <span className={`text-xs font-semibold ${newUserName.length >= 20 && newUserName.length <= 60 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {newUserName.length}/60
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  placeholder="Min 20 characters, Max 60 characters"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Assign Role
+                </label>
+                <select
+                  value={newUserRole}
+                  onChange={(e) => setNewUserRole(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                >
+                  <option value="USER">Normal User</option>
+                  <option value="STORE_OWNER">Store Owner</option>
+                  <option value="ADMIN">System Administrator</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Address (Max 400 chars)
+                  </label>
+                  <span className="text-xs text-slate-400">
+                    {newUserAddress.length}/400
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={newUserAddress}
+                  onChange={(e) => setNewUserAddress(e.target.value)}
+                  maxLength={400}
+                  placeholder="Physical street address..."
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="8-16 chars, 1 uppercase, 1 special symbol"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  8-16 characters, $\ge 1$ uppercase letter, $\ge 1$ special character.
+                </p>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(false)}
+                  className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={userModalLoading}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-md shadow-brand-600/20 disabled:opacity-50"
+                >
+                  {userModalLoading ? "Saving..." : "Create User"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isAddStoreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2 text-slate-800 font-bold text-lg">
+                <Building className="w-5 h-5 text-brand-600" />
+                <h3>Add New Store</h3>
+              </div>
+              <button
+                onClick={() => setIsAddStoreModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStore} className="p-6 space-y-4">
+              {storeModalError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 shrink-0 text-rose-500 mt-0.5" />
+                  <span>{storeModalError}</span>
+                </div>
+              )}
+
+              {storeModalSuccess && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <span>{storeModalSuccess}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Store Name
+                </label>
+                <input
+                  type="text"
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="e.g. Blue Lagoon Coffee Roastery"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Store Contact Email
+                </label>
+                <input
+                  type="email"
+                  value={newStoreEmail}
+                  onChange={(e) => setNewStoreEmail(e.target.value)}
+                  placeholder="contact@store.com"
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Store Physical Address (Max 400 chars)
+                  </label>
+                  <span className="text-xs text-slate-400">
+                    {newStoreAddress.length}/400
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={newStoreAddress}
+                  onChange={(e) => setNewStoreAddress(e.target.value)}
+                  maxLength={400}
+                  placeholder="Store street, avenue, suite, city..."
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Assign Store Owner (Optional)
+                </label>
+                <select
+                  value={newStoreOwnerId}
+                  onChange={(e) => setNewStoreOwnerId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-sm"
+                >
+                  <option value="">-- No Owner Assigned (Unassigned) --</option>
+                  {eligibleStoreOwners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name} ({owner.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">
+                  Lists users with role Store Owner.
+                </p>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddStoreModalOpen(false)}
+                  className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={storeModalLoading}
+                  className="px-5 py-2.5 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-md shadow-brand-600/20 disabled:opacity-50"
+                >
+                  {storeModalLoading ? "Creating..." : "Save Store"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
